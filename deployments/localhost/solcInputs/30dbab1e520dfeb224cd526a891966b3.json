@@ -1,0 +1,41 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/FundMe.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity 0.8.17;\nimport \"@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol\";\nimport \"./PriceConverter.sol\";\n\nerror FundMe__NotOwner();\n\n/**\n * @title A Sample Funding Contract\n * @notice This contract is for creating a sample funding contract\n * @dev This implements price feeds as our library\n */\ncontract FundMe {\n    // Type Declarations\n    using PriceConverter for uint256;\n\n    //State variable\n    event Funded(address indexed from, uint256 amount);\n    uint256 public constant MINIMUM_USD = 5 * 10**18; //or 50 * 1e18;\n    address[] private s_funders;\n    mapping(address => uint256) private s_addressToAmountFunded;\n    address private immutable i_owner;\n    AggregatorV3Interface public s_priceFeed;\n\n    modifier onlyOwner() {\n        //require(msg.sender == i_owner, \"Sender is not owner\");\n        if (msg.sender != i_owner) {\n            revert FundMe__NotOwner();\n        } //thi is more gas-efficient\n        _; //This means the rest of the code should be executed if the condition above is met;\n    }\n\n    constructor(address s_priceFeedAddress) {\n        i_owner = msg.sender;\n        s_priceFeed = AggregatorV3Interface(s_priceFeedAddress);\n    }\n\n    /**\n     * @notice This function funds our contract based on the ETH/USD price\n     * @dev This implements price feeds as our library\n     */\n    function fund() public payable {\n        require(\n            msg.value.getConversionRate(s_priceFeed) >= MINIMUM_USD,\n            \"Didn't send enough! You need to spend more ETH\"\n        );\n        s_addressToAmountFunded[msg.sender] += msg.value; //We increase the amount once the account is funded\n        s_funders.push(msg.sender);\n    }\n\n    function withdraw() public onlyOwner {\n        for (uint256 i = 0; i < s_funders.length; i++) {\n            address funder = s_funders[i];\n            s_addressToAmountFunded[funder] = 0;\n        }\n        //reset the array\n        s_funders = new address[](0);\n        //Below are ways we send or tranfer ether:\n        //Transfer\n        //payable(msg.sender).transfer(address(this).balance); //It returns nothing. It authomatically revert the amount. \"this\" keyword means everything in the contract above.\n\n        //Send\n        //bool sendSuccess = payable(msg.sender).send(address(this).balance); //It returns bool;\n        //require(sendSuccess, \"Send failed\");\n\n        //Call\n        // (bool success, ) = i_owner.call{value: address(this).balance}(\"\");\n        // require(success);\n        (bool success, ) = payable(msg.sender).call{\n            value: address(this).balance\n        }(\"\");\n        require(success, \"Transfer failed\");\n    }\n\n    function getOwner() public view returns (address) {\n        return i_owner;\n    }\n\n    function getFunder(uint256 index) public view returns (address) {\n        return s_funders[index];\n    }\n\n    function getAddressToAmountFunded(address funder)\n        public\n        view\n        returns (uint256)\n    {\n        return s_addressToAmountFunded[funder];\n    }\n\n    function getPriceFeed() public view returns (AggregatorV3Interface) {\n        return s_priceFeed;\n    }\n}\n"
+    },
+    "contracts/PriceConverter.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity 0.8.17;\nimport \"@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol\";\n\nlibrary PriceConverter {\n    function getPrice(AggregatorV3Interface priceFeed)\n        internal\n        view\n        returns (uint256)\n    {\n        //To consume price data, your smart contract should reference AggregatorV3Interface;\n        //We need: 1. ABI (To get the ABI, we need the interface)\n        //2. Address(0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e)/\n        //To interact with another external or internal contract ABI and address.\n        //In this case we need to reference AggregatorV3Interface which is a function under contract PriceConsumerV3\n        //In oder word, to achieve interface, we need ABI and address as shown below\n        // Goerli ETH / USD Address\n        // https://docs.chain.link/docs/ethereum-addresses/\n        // AggregatorV3Interface priceFeed = AggregatorV3Interface(\n        //     0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e\n        // );\n        (, int256 price, , , ) = priceFeed.latestRoundData();\n        //ETH in terms of USD\n        return uint256(price * 1e10); //This is type-casting. //1**10 == 10000000000\n    }\n\n    // function getVersion() internal view returns (uint256) {\n    //     // ETH/USD price feed address of Goerli Network.\n    //     AggregatorV3Interface priceFeed = AggregatorV3Interface(\n    //         0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e\n    //     );\n    //     return priceFeed.version();\n    // }\n\n    function getConversionRate(\n        uint256 ethAmount,\n        AggregatorV3Interface priceFeed\n    ) internal view returns (uint256) {\n        uint256 ethPrice = getPrice(priceFeed);\n        uint256 ethAmountInUsd = (ethPrice * ethAmount) / 1000000000000000000; //or 1e18; //We are dividing by 1e18 because ethPrice * ethAmount would give us 1e36\n        // the actual ETH/USD conversation rate, after adjusting the extra 0s.\n        return ethAmountInUsd;\n    }\n}\n"
+    },
+    "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface AggregatorV3Interface {\n  function decimals() external view returns (uint8);\n\n  function description() external view returns (string memory);\n\n  function version() external view returns (uint256);\n\n  function getRoundData(uint80 _roundId)\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n\n  function latestRoundData()\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
