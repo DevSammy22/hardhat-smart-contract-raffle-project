@@ -1,4 +1,4 @@
-# Hardhat Fund Me Smart Contract Project
+# Hardhat Smart Contract Raffle Project
 
 - [Hardhat Fund Me](#hardhat-fund-me)
 - [Getting Started](#getting-started)
