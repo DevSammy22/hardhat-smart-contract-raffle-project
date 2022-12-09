@@ -136,3 +136,9 @@ yarn format
 
 
 # Thank you!
+
+1. Raffle
+2. Enter the lottery (paying some amount)
+3. Pick a random winner (verifying random)
+4. Winner to be selected every X minutes --> completely automate
+5. Chainlink Oracle -> Randomness, Automated Execution (Chainlink Keepers)
